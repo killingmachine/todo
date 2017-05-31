@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title></title>
+	<meta charset="utf-8"/>
+	<script src="script/jquery.min.js"></script>
+	<script src="script/ko.js"></script>
+	<script src="script/parse.js"></script>
+	<script type="https://npmcdn.com/parse@1.9.2/dist/parse.js"></script>
+	<style type="text/css">
+		*{
+			margin: 0;
+			padding: 0;
+		}
+		body{
+			background-color: #F0F0F0;
+		}
+		header{
+			text-align: center;
+			background-color: white;
+			padding:10px 0 10px 0;
+			border: 1px solid  #C8C8C8;
+		}
+		section > div{
+			margin-top: 20px;
+			text-align: center;
+		}
+		input[type='text']{
+			width: 400px;
+		}
+		#cont{
+			width: 500px;
+			margin: 10px auto 0 auto;
+			text-align: left;
+		}
+		.right,.remBtn{
+			float: right;
+		}
+		#cont>h1{
+			text-align: center;
+		}
+	</style>
+	
+</head>
+<body>
+	<header>
+		<h1>Create a todo List</h1>
+		<span><i>you have <span data-bind="text: totalComTask">0</span> task to do</i></span>
+	</header>
+	<section>
+		<div>
+			<input id='' type='text' maxlength="254" data-bind="value: newTask"> <button data-bind="click: addTask">Add Task</button>
+		</div>
+		<div id='cont'>
+			<h1>TASK</h1>
+			<div id='task' data-bind="foreach: tasks, load: ">
+				 <input class='cbx' type="checkbox" data-bind="checked: stat, click: myF"> 
+
+				 <span  data-bind="text: task"></span> 
+				 <button class='remBtn' data-bind="click: $root.delTask">X</button>
+				  <span class='right' data-bind="text: date"></span>
+				 <hr/>
+				 <br/>
+			</div>
+
+		</div>
+	</section>
+</body>
+<script>
+
+function initOnload(){
+	Parse.initialize("6GDWSRfpIbfL82lvcMdVsxbGhjc8N9kCQelK5NeE", "LwGQUtlsZaGzWI6YiUZY3x87pWYdHHDE8njzK7WG");
+  	Parse.serverURL = 'https://parseapi.back4app.com';
+  	var myTask = Parse.Object.extend("myTask");
+  	var query = new Parse.Query(myTask);
+  		
+//////task properties and methods
+  function taskToDo(task,tDate,tId,pStat){
+  	// query.equalTo("objectId",self.tasks()[i].taskId);
+				
+				// query.first({
+				//     success: function(result) {
+
+				// 	    result.set("status",true);
+				// 	    result.save();
+				//     },
+				//     error: function(error) {
+				//     	console.log("Error: " + error.code + " " + error.message);
+			 //    	}
+		  //  		});
+  		
+  		this.taskId = tId;
+		this.task = task;
+		this.stat = ko.observable(pStat);
+			if(this.stat() == false){
+				this.stat(false);
+			}
+		this.myF = function(){
+			var k = false
+			console.log(this.stat());
+			if(this.stat() == false){
+				k = false;
+			}
+			else{
+				k = true;
+			}
+			query.equalTo("objectId",this.taskId);
+			 query.first({
+				success: function(result) {
+					    result.set("status",k);
+					    result.save();
+				    },
+				error: function(error) {
+				    	console.log("Error: " + error.code + " " + error.message);
+			    	}
+		   		});
+
+			return true;
+		}
+		this.date = tDate;
+		this.date = ko.computed(function(){
+			var day = tDate.getDate();
+			var mnth = tDate.getMonth()+1;
+			var yr = tDate.getFullYear();
+			var fullDate = mnth + '-' + day + '-' + yr;
+			return fullDate;
+		});
+	}
+
+/////task model
+  var taskModel = function() {
+   	var self = this;
+   	self.tasks = ko.observableArray([]);
+	self.newTask = ko.observable('');
+	
+
+	////display object from post
+	query.find({
+	    success: function(results) {
+		    for (var i = 0; i < results.length; i++) {
+		    	var tId  = results[i].id;
+		      	var nTask = results[i].get('task');
+		      	var ndte = Date.parse(results[i].get('date'));
+		      	var nStat = results[i].get('status');
+		      	self.tasks.push(new taskToDo(nTask,new Date(ndte),tId,nStat));
+		     
+		      	
+		     }
+	    },
+	    error: function(error) {
+	    	console.log("Error: " + error.code + " " + error.message);
+    	}
+   	});
+	////add task
+	self.addTask = function() {
+		///check if its empty
+		if(self.newTask() == ''){
+			alert('pls fill up the task box');
+		}
+		else{
+			var addQ = new myTask();
+			///set task id empty string first for the ui cause parse generates its own unique id
+			var taskObj = new taskToDo(self.newTask(), new Date(),'',false);
+			query.equalTo("task",taskObj.task);
+			query.first({
+				success: function(result){
+					////check for duplicate task base on task name
+					if(result == undefined){
+						addQ.set("task",taskObj.task);
+			        	addQ.set("date",taskObj.date());
+			        	addQ.set("status",taskObj.stat());
+			        	addQ.save(null, {
+			        		success:function(){
+			        			self.tasks.push(taskObj);
+			        			self.newTask('');
+			        		},
+			        		error:function(addQ,error){
+			        			console.log(error.message);
+			        		}
+			        	});
+					}
+					else{
+						alert('no duplicate task pls');
+					}
+				}
+			})
+		}
+    }
+    ////del task
+    self.delTask = function(){
+    	///remthis scope should be above the .get function of parse
+    	remthis = this;
+ 		query.get(this.taskId, {
+ 			success: function(oId){
+ 				oId.destroy({});
+ 				self.tasks.remove(remthis);
+ 			}
+ 		});
+		
+	}
+	self.totalComTask = ko.computed(function(){
+		var total = 0;
+
+		for(var i = 0; i < self.tasks().length; i++){
+			if(self.tasks()[i].stat() == false){
+				total++;	
+			}
+		}
+		return total;
+	});	
+  }
+  ko.applyBindings(new taskModel());
+}
+window.addEventListener('load',initOnload);
+
+</script>
+
+</html>
